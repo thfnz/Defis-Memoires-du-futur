@@ -69,10 +69,11 @@ int scOut(){
 	return resultat;
 }
 
-void scBL(int pos){
-	// Fonction semblable à scWLSL. Utile si implémentation de l'écriture unitaire.
+void scBL(byte rep[8], int colonne){
+	// cf implémentation de l'écriture unitaire
 	pOFF(PORTB, SC_SEL_ZERO);
 	pON(PORTB, SC_SEL_UN);
+
 	for(int i = 0; i < 128; i++){
 		if(i == pos){
 			pON(PORTB, SC_IN);
@@ -136,7 +137,7 @@ void unPara(int ligne){
 	clk();
 }
 
-void lecture(int ligne, int writeBack){
+void lectCellule(int ligne, int writeBack){
 	// Lecture du contenu d'une ligne.
 	// writeBack == 1 active le Write-Back. L'opération de lecture étant normalement destructive,
 	// ce paramètre doit être activé si l'on souhaite réutiliser plus tard le contenu de la ligne.
@@ -179,7 +180,42 @@ void lecture(int ligne, int writeBack){
 	clk();
 }
 
+int lecture(int ligne, int colonne){
+	int lu = 0;
+		for(int i = 0; i < 8; i++){
+		lectCellule(ligne, (colonne - 1) * 8);
+		if(lect(PINB, SC_OUT) != 0){
+			lu += pow(2, i);
+		}
+	}
+	return lu;
+}
+
+void zeroUnitaire(){
+	pON(PORTD, PRE);
+	clk();
+	pON(PORTD, WL);
+	clk();
+	clk();
+	pOFF(PORTD, PRE);
+	clk();
+	pON(PORTD, SL);
+	pON(PORTD, BL);
+	clk();
+	pOFF(PORTD, SL);
+	pOFF(PORTD, BL);
+	clk();
+	pON(PORTD, PRE);
+	clk();
+	clk();
+	pOFF(PORTD, WL);
+	clk();
+	pOFF(PORTD, PRE);
+	clk();
+}
+
 void setup(){
+	// Configuration des pins
 	pinMode(WB, OUTPUT);
 	pinMode(SA, OUTPUT);
 	pinMode(SL, OUTPUT);
@@ -192,8 +228,76 @@ void setup(){
 	pinMode(SC_SEL_UN, OUTPUT);
 
 	pinMode(SC_OUT, INPUT);
+
+	// Interface homme-machine par le moniteur série
+	Serial.begin(9600);
+	Serial.println("1. Ecriture");
+	Serial.println("2. Lecture");
+}
+
+byte stringToIntToBytes(String rep){
+	// Transforme la chaîne de caractère donnée par l'utilisateur en tableau contenant sa décomposition en base 2.
+	int repInt = rep.toInt();
+	byte repBits[8];
+	for(byte i = 0; i < 8; i++){
+		repBits[i] = ~ bitRead(repInt, i); // NOT bit --> Il est préférable de tout placer à 1 puis placer les 0 (cf fonction scBL)
+	}
+	return repBits;
 }
 
 void loop(){
-	
+	if(Serial.available() > 0){ // Attente d'une réponse de l'utilisateur
+		String reponse = Serial.readStringUntil('\n');
+		int repInt = reponse.toInt();
+		switch(repInt){
+		case 1: // Ecriture d'un entier 8bits (pour l'instant, objectif stocker float https://en.wikipedia.org/wiki/Quadruple-precision_floating-point_format)
+			// Nombre à coder.
+			Serial.println("Entier non signé 8 bits (0 <= nb <= 255) à écrire :"); 
+			while(!Serial.available());// Attente d'une réponse
+			reponse = Serial.readStringUntil('\n');
+			byte repBits = stringToIntToBytes(reponse);
+
+			// Position.
+			Serial.println("Ligne ?"); 
+			while(!Serial.available());// Attente d'une réponse
+			reponse = Serial.readStringUntil('\n');
+			int ligne = reponse.toInt();
+
+			Serial.println("Colonne ?"); 
+			while(!Serial.available());// Attente d'une réponse
+			reponse = Serial.readStringUntil('\n');
+			int colonne = reponse.toInt();
+
+			// Codage.
+			// Remise à 1.
+			scBL({1, 1, 1, 1, 1, 1, 1, 1}, (colonne - 1) * 8); // Remise à 1 de l'octet.
+			unPara(ligne); // scWLSL déjà dans unPara.
+
+			// Placement des 0.
+			scBL(repBits, (colonne - 1) * 8);
+			zeroUnitaire();
+
+		case 2: // Lecture.
+			// Position.
+			Serial.println("Ligne ?"); 
+			while(!Serial.available());// Attente d'une réponse
+			reponse = Serial.readStringUntil('\n');
+			int ligne = reponse.toInt();
+
+			Serial.println("Colonne ?"); 
+			while(!Serial.available());// Attente d'une réponse
+			reponse = Serial.readStringUntil('\n');
+			int colonne = reponse.toInt();
+
+			// Lecture.
+			int lu = lecture(ligne, colonne);
+			Serial.println(lu);
+			break;
+
+		default:
+			Serial.println("Incorrect");
+		}
+	}
+
+
 }
