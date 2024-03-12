@@ -71,15 +71,24 @@ int scOut(){
 
 void scBL(byte rep[8], int colonne){
 	// cf implémentation de l'écriture unitaire
+	// A VERIFIER SUR CARTE -----------------------------------------------
 	pOFF(PORTB, SC_SEL_ZERO);
 	pON(PORTB, SC_SEL_UN);
 
-	for(int i = 0; i < 128; i++){
-		if(i == pos){
+	for(int i = 0; i < 120; i++){
+		if(i == (colonne - 1) * 8){
+			for(int j = 0; j < 8; j++){
+				if(rep[j] == 0){
+					pON(PORTB, SC_IN);
+					clk();
+					pOFF(PORTB, SC_IN);
+				} else clk();
+			}
+		} else {
 			pON(PORTB, SC_IN);
 			clk();
 			pOFF(PORTB, SC_IN);
-		} else clk();
+		}
 	}
 }
 
@@ -270,24 +279,26 @@ void loop(){
 
 			// Codage.
 			// Remise à 1.
-			scBL({1, 1, 1, 1, 1, 1, 1, 1}, (colonne - 1) * 8); // Remise à 1 de l'octet.
+			byte* queDes1 = '11111111';
+			scBL(queDes1, (colonne - 1) * 8); // Remise à 1 de l'octet.
 			unPara(ligne); // scWLSL déjà dans unPara.
 
 			// Placement des 0.
 			scBL(repBits, (colonne - 1) * 8);
 			zeroUnitaire();
+			break;
 
 		case 2: // Lecture.
 			// Position.
 			Serial.println("Ligne ?"); 
 			while(!Serial.available());// Attente d'une réponse
 			reponse = Serial.readStringUntil('\n');
-			int ligne = reponse.toInt();
+			ligne = reponse.toInt();
 
 			Serial.println("Colonne ?"); 
 			while(!Serial.available());// Attente d'une réponse
 			reponse = Serial.readStringUntil('\n');
-			int colonne = reponse.toInt();
+			colonne = reponse.toInt();
 
 			// Lecture.
 			int lu = lecture(ligne, colonne);
